@@ -67,7 +67,7 @@ func main() {
 	if len(arguments) != 1 {
 		PORT = ":" + arguments[1]
 	}
-	fmt.Println("Using port number @@@@: ", PORT)
+	fmt.Println("Using port number @@@@@: ", PORT)
 
 	http.HandleFunc("/time", timeHandler)
 	http.HandleFunc("/getdata", getData)
