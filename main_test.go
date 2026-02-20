@@ -218,6 +218,22 @@ func Test_myHandler_methodPOST(t *testing.T) {
 	}
 }
 
+func Test_myHandler_multipleRoutes(t *testing.T) {
+	routes := []string{"/", "/about", "/api/v1/users", "/health"}
+	for _, route := range routes {
+		req := httptest.NewRequest("GET", route, nil)
+		rr := httptest.NewRecorder()
+		myHandler(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("route %s: expected status 200, got %d", route, rr.Code)
+		}
+		if !strings.Contains(rr.Body.String(), route) {
+			t.Errorf("route %s: response should contain the path", route)
+		}
+	}
+}
+
 func Test_timeHandler_statusCode(t *testing.T) {
 	req := httptest.NewRequest("GET", "/time", nil)
 	rr := httptest.NewRecorder()
