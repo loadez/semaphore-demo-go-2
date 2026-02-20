@@ -3,9 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func createTable() {
@@ -144,4 +147,113 @@ func Test_record(t *testing.T) {
 		t.Errorf("Wrong server response!")
 	}
 	dropTable()
+}
+
+func Test_myHandler_root(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+	myHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+	expected := "Serving: /\n"
+	if rr.Body.String() != expected {
+		t.Errorf("expected %q, got %q", expected, rr.Body.String())
+	}
+}
+
+func Test_myHandler_customPath(t *testing.T) {
+	req := httptest.NewRequest("GET", "/hello/world", nil)
+	rr := httptest.NewRecorder()
+	myHandler(rr, req)
+
+	if !strings.Contains(rr.Body.String(), "/hello/world") {
+		t.Errorf("response should contain the request path, got %q", rr.Body.String())
+	}
+}
+
+func Test_timeHandler_containsTime(t *testing.T) {
+	req := httptest.NewRequest("GET", "/time", nil)
+	rr := httptest.NewRecorder()
+	timeHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "The current time is:") {
+		t.Errorf("response should contain time header, got %q", body)
+	}
+	if !strings.Contains(body, "Serving: /time") {
+		t.Errorf("response should contain serving path, got %q", body)
+	}
+}
+
+func Test_timeHandler_HTMLStructure(t *testing.T) {
+	req := httptest.NewRequest("GET", "/time", nil)
+	rr := httptest.NewRecorder()
+	timeHandler(rr, req)
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "<h1") {
+		t.Errorf("response should contain h1 tag, got %q", body)
+	}
+	if !strings.Contains(body, "<h2") {
+		t.Errorf("response should contain h2 tag, got %q", body)
+	}
+}
+
+func Test_myHandler_methodPOST(t *testing.T) {
+	req := httptest.NewRequest("POST", "/submit", nil)
+	rr := httptest.NewRecorder()
+	myHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200 for POST, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "/submit") {
+		t.Errorf("response should contain path for POST request")
+	}
+}
+
+func Test_timeHandler_statusCode(t *testing.T) {
+	req := httptest.NewRequest("GET", "/time", nil)
+	rr := httptest.NewRecorder()
+	timeHandler(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Errorf("expected status %d, got %d", http.StatusCreated, rr.Code)
+	}
+}
+
+func Test_timeHandler_responseFreshness(t *testing.T) {
+	before := time.Now()
+
+	jitter := time.Duration(rand.Intn(1200)) * time.Millisecond
+	time.Sleep(jitter)
+
+	req := httptest.NewRequest("GET", "/time", nil)
+	rr := httptest.NewRecorder()
+	timeHandler(rr, req)
+
+	after := time.Now()
+	body := rr.Body.String()
+
+	start := strings.Index(body, "<h2 align=\"center\">")
+	end := strings.Index(body, "</h2>")
+	if start == -1 || end == -1 {
+		t.Fatal("could not find time in response body")
+	}
+	timeStr := body[start+len("<h2 align=\"center\">") : end]
+
+	parsedTime, err := time.Parse(time.RFC1123, timeStr)
+	if err != nil {
+		t.Fatalf("could not parse time from response: %v", err)
+	}
+
+	if parsedTime.Before(before.Truncate(time.Second)) || parsedTime.After(after.Add(1*time.Second)) {
+		t.Errorf("response time %v is not between %v and %v", parsedTime, before, after)
+	}
 }
