@@ -1,0 +1,30 @@
+version: v1.0
+name: Integration Tests
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+blocks:
+  - name: API tests
+    task:
+      jobs:
+        - name: Run API tests
+          commands:
+            - echo "Running API integration tests"
+  - name: E2E tests
+    task:
+      jobs:
+        - name: Run E2E
+          commands:
+            - echo "Running E2E tests"
+  - name: Load tests
+    task:
+      jobs:
+        - name: Run load tests
+          commands:
+            - echo "Running load tests"
+promotions:
+  - name: Security Scan
+    auto_promote:
+      when: result = 'passed'
+    pipeline_file: security.yml

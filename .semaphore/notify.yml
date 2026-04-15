@@ -1,0 +1,25 @@
+version: v1.0
+name: Notify & Cleanup
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+blocks:
+  - name: Slack notify
+    task:
+      jobs:
+        - name: Send notification
+          commands:
+            - echo "Sending Slack notification"
+  - name: Update changelog
+    task:
+      jobs:
+        - name: Changelog
+          commands:
+            - echo "Updating changelog"
+  - name: Tag release
+    task:
+      jobs:
+        - name: Git tag
+          commands:
+            - echo "Tagging release"

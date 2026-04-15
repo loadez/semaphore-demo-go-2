@@ -1,0 +1,30 @@
+version: v1.0
+name: Pre-prod
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+blocks:
+  - name: Provision pre-prod
+    task:
+      jobs:
+        - name: Terraform apply
+          commands:
+            - echo "Provisioning pre-prod"
+  - name: Deploy pre-prod
+    task:
+      jobs:
+        - name: Deploy
+          commands:
+            - echo "Deploying to pre-prod"
+  - name: Smoke tests
+    task:
+      jobs:
+        - name: Smoke
+          commands:
+            - echo "Running smoke tests"
+promotions:
+  - name: Production
+    auto_promote:
+      when: result = 'passed'
+    pipeline_file: production.yml

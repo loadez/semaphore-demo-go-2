@@ -51,3 +51,8 @@ after_pipeline:
       - name: Publish Results
         commands:
           - test-results gen-pipeline-report
+promotions:
+  - name: Staging Deploy
+    auto_promote:
+      when: result = 'passed'
+    pipeline_file: staging.yml

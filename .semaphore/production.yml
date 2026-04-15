@@ -1,0 +1,36 @@
+version: v1.0
+name: Production Deploy
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+blocks:
+  - name: Deploy canary
+    task:
+      jobs:
+        - name: Canary deploy
+          commands:
+            - echo "Deploying canary"
+  - name: Verify canary
+    task:
+      jobs:
+        - name: Health check
+          commands:
+            - echo "Verifying canary health"
+  - name: Full rollout
+    task:
+      jobs:
+        - name: Rolling deploy
+          commands:
+            - echo "Full production rollout"
+  - name: Post-deploy verify
+    task:
+      jobs:
+        - name: Verify
+          commands:
+            - echo "Post-deploy verification"
+promotions:
+  - name: Notify
+    auto_promote:
+      when: result = 'passed'
+    pipeline_file: notify.yml

@@ -1,0 +1,24 @@
+version: v1.0
+name: Security Scan
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+blocks:
+  - name: SAST
+    task:
+      jobs:
+        - name: Static analysis
+          commands:
+            - echo "Running SAST"
+  - name: Dependency audit
+    task:
+      jobs:
+        - name: Audit deps
+          commands:
+            - echo "Auditing dependencies"
+promotions:
+  - name: Pre-prod
+    auto_promote:
+      when: result = 'passed'
+    pipeline_file: preprod.yml

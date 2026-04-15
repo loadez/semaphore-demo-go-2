@@ -1,0 +1,24 @@
+version: v1.0
+name: Staging Deploy
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+blocks:
+  - name: Prepare staging
+    task:
+      jobs:
+        - name: Setup env
+          commands:
+            - echo "Setting up staging environment"
+  - name: Deploy to staging
+    task:
+      jobs:
+        - name: Deploy
+          commands:
+            - echo "Deploying to staging"
+promotions:
+  - name: Integration Tests
+    auto_promote:
+      when: result = 'passed'
+    pipeline_file: integration.yml
