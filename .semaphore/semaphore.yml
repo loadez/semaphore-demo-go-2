@@ -1,15 +1,15 @@
 version: v1.0
-name: f1-noble-demand-test
+name: f1-jammy-demand-test
 agent:
   machine:
     type: f1-standard-2
-    os_image: ubuntu2404
+    os_image: ubuntu2204
 blocks:
-  - name: noble-load
+  - name: jammy-load
     task:
       jobs:
-        - name: noble-sleep
+        - name: jammy-sleep
           parallelism: 12
           commands:
-            - echo "occupying f1-standard-2 / ubuntu2404 (noble) to skew chmura demand"
-            - sleep 480
+            - echo "occupying f1-standard-2 / ubuntu2204 (jammy) to skew chmura demand"
+            - sleep 600
