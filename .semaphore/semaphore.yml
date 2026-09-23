@@ -1,15 +1,15 @@
 version: v1.0
-name: f1-jammy-demand-test
+name: f1-std4-demand-test
 agent:
   machine:
-    type: f1-standard-2
+    type: f1-standard-4
     os_image: ubuntu2204
 blocks:
-  - name: jammy-load
+  - name: std4-load
     task:
       jobs:
-        - name: jammy-sleep
-          parallelism: 12
+        - name: std4-sleep
+          parallelism: 8
           commands:
-            - echo "occupying f1-standard-2 / ubuntu2204 (jammy) to skew chmura demand"
+            - echo "occupying f1-standard-4 / ubuntu2204 to skew chmura demand toward larger VMs"
             - sleep 600
