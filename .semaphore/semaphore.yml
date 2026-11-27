@@ -136,7 +136,7 @@ blocks:
               EXPOSE 8001
               ENTRYPOINT ["app"]
               DOCKER
-            - retry --times 3 -- docker build -t demo-app:$SEMAPHORE_GIT_SHA .
+            - retry --times 3 docker build -t demo-app:$SEMAPHORE_GIT_SHA .
             - docker images demo-app
             - docker run -d --name app -p 8001:8001 demo-app:$SEMAPHORE_GIT_SHA
             - sleep 3
@@ -191,7 +191,7 @@ blocks:
         - name: flaky with retry
           commands:
             - rm -f /tmp/flaky.count
-            - retry --times 4 --sleep 2 -- ./scripts/flaky.sh
+            - retry --times 4 --sleep 2 ./scripts/flaky.sh
 
 after_pipeline:
   task:

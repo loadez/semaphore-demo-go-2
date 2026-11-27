@@ -8,7 +8,7 @@ esac
 mkdir -p /tmp/net && cd /tmp/net
 for round in 1 2; do
   echo "--- round $round: $f"
-  retry --times 3 --sleep 3 -- curl -fsSL -o "$f" "https://dl.google.com/go/$f"
+  retry --times 3 --sleep 3 curl -fsSL -o "$f" "https://dl.google.com/go/$f"
   want=$(curl -fsSL "https://dl.google.com/go/$f.sha256")
   got=$(sha256sum "$f" | cut -d' ' -f1)
   echo "want=$want got=$got size=$(stat -c%s "$f")"
