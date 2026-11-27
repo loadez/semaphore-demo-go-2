@@ -1,53 +1,198 @@
 version: v1.0
-name: Semaphore Go CI example
+name: sxmoon complex CI
 agent:
   machine:
     type: f1-standard-2
     os_image: ubuntu2204
+fail_fast:
+  stop:
+    when: "branch != 'master'"
+global_job_config:
+  env_vars:
+    - name: GOFLAGS
+      value: "-mod=mod"
+    - name: GO_VERSION
+      value: "1.22"
+  prologue:
+    commands:
+      - checkout
+      - sem-version go $GO_VERSION
+      - export PATH=$PATH:$(go env GOPATH)/bin
+      - cache restore go-mod-$(checksum go.sum),go-mod-
+  epilogue:
+    commands:
+      - cache has_key go-mod-$(checksum go.sum) || cache store go-mod-$(checksum go.sum) $(go env GOMODCACHE)
 blocks:
-  - name: Build project
+  - name: Lint
+    dependencies: []
     task:
       jobs:
-        - name: go get & build
+        - name: go vet
           commands:
-            - checkout
-            - sem-version go 1.21
-            - go get
-            - go build -o ./bin/main
-            - cache store $(checksum main.go) bin
-  - name: Check code style
-    task:
-      jobs:
+            - go vet ./...
+            - go vet -tags integration ./...
         - name: gofmt
           commands:
-            - checkout
-            - sem-version go 1.21
-            - gofmt main.go | diff --ignore-tab-expansion main.go -
-  - name: Run tests
+            - test -z "$(gofmt -l .)" || { gofmt -d .; exit 1; }
+        - name: staticcheck
+          commands:
+            - cache restore staticcheck-2024.1.1 || true
+            - command -v staticcheck || go install honnef.co/go/tools/cmd/staticcheck@2024.1.1
+            - cache has_key staticcheck-2024.1.1 || cache store staticcheck-2024.1.1 $(go env GOPATH)/bin
+            - staticcheck ./...
+
+  - name: Build
+    dependencies: []
+    task:
+      jobs:
+        - name: build binaries
+          matrix:
+            - env_var: TARGET
+              values: ["linux/amd64", "linux/arm64", "darwin/arm64"]
+          commands:
+            - export GOOS=${TARGET%/*} GOARCH=${TARGET#*/} CGO_ENABLED=0
+            - mkdir -p bin
+            - go build -trimpath -ldflags "-s -w" -o bin/main-$GOOS-$GOARCH .
+            - go build -trimpath -o bin/e2eclient-$GOOS-$GOARCH ./cmd/e2eclient
+            - ls -l bin
+            - artifact push workflow bin --destination bin-$GOOS-$GOARCH --force
+
+  - name: Unit tests
+    dependencies: ["Lint"]
     task:
       prologue:
         commands:
-          - checkout
-          - sem-version go 1.21
+          - cache restore gotestsum-0.0.1 || true
+          - command -v gotestsum || go install gotest.tools/gotestsum@v1.11.0
+          - cache has_key gotestsum-0.0.1 || cache store gotestsum-0.0.1 $(go env GOPATH)/bin
       jobs:
-        - name: go test
-          execution_time_limit:
-            minutes: 1
+        - name: go test -race
           commands:
-            - sem-service start postgres
-            - psql -p 5432 -h localhost -U postgres -c "CREATE DATABASE s2"
-            - go install gotest.tools/gotestsum@latest
-            - sleep 120
-            - gotestsum --junitfile junit.xml ./...
-        - name: Test web server
+            - gotestsum --junitfile junit-race.xml --format testname -- -race -count=1 ./internal/work/...
+        - name: coverage
           commands:
-            - cache restore $(checksum main.go)
-            - ./bin/main 8001 &
-            - 'curl --silent localhost:8001/time | grep "The current time is"'
+            - gotestsum --junitfile junit-cover.xml -- -count=1 -covermode=atomic -coverprofile=cover.out ./internal/work/...
+            - go tool cover -func=cover.out | tail -15
+            - go tool cover -html=cover.out -o cover.html
+            - artifact push workflow cover.html --expire-in 1d
+        - name: benchmarks cpu
+          commands:
+            - go test ./internal/work/ -run '^$' -bench 'FibRec|Primes|HashChain' -benchtime 3s -count 2 -cpu 1,2 | tee bench-cpu.txt
+        - name: benchmarks alloc
+          commands:
+            - go test ./internal/work/ -run '^$' -bench 'Mul' -benchmem -benchtime 5x -count 3 | tee bench-mem.txt
       epilogue:
         always:
           commands:
-            - test-results publish junit.xml
+            - test -f junit-race.xml && test-results publish junit-race.xml || true
+            - test -f junit-cover.xml && test-results publish junit-cover.xml || true
+
+  - name: Integration tests
+    dependencies: ["Unit tests"]
+    task:
+      env_vars:
+        - name: PG_DSN
+          value: "host=localhost user=postgres dbname=s2 sslmode=disable"
+        - name: REDIS_ADDR
+          value: "localhost:6379"
+      prologue:
+        commands:
+          - sem-service start postgres 14
+          - sem-service start redis 6
+          - psql -h localhost -U postgres -c "CREATE DATABASE s2"
+          - cache restore gotestsum-0.0.1 || true
+          - command -v gotestsum || go install gotest.tools/gotestsum@v1.11.0
+      jobs:
+        - name: store tests (postgres+redis)
+          commands:
+            - gotestsum --junitfile junit-int.xml -- -tags integration -race -count=1 ./internal/store/...
+        - name: root handlers + postgres
+          commands:
+            - gotestsum --junitfile junit-root.xml -- -count=1 .
+        - name: repeated store tests
+          commands:
+            - gotestsum --junitfile junit-rep.xml -- -tags integration -count=5 ./internal/store/...
+      epilogue:
+        always:
+          commands:
+            - test-results publish junit-*.xml || true
+
+  - name: Docker
+    dependencies: ["Build"]
+    task:
+      jobs:
+        - name: image build and run
+          commands:
+            - |
+              cat > Dockerfile <<'DOCKER'
+              FROM golang:1.22-alpine AS build
+              WORKDIR /src
+              COPY go.mod go.sum ./
+              RUN go mod download
+              COPY . .
+              RUN CGO_ENABLED=0 go build -o /out/app .
+              FROM alpine:3.19
+              COPY --from=build /out/app /usr/local/bin/app
+              EXPOSE 8001
+              ENTRYPOINT ["app"]
+              DOCKER
+            - retry --times 3 -- docker build -t demo-app:$SEMAPHORE_GIT_SHA .
+            - docker images demo-app
+            - docker run -d --name app -p 8001:8001 demo-app:$SEMAPHORE_GIT_SHA
+            - sleep 3
+            - curl -fs localhost:8001/time | grep "The current time is"
+            - docker logs app
+            - docker rm -f app
+
+  - name: Memory heavy
+    dependencies: ["Build"]
+    task:
+      jobs:
+        - name: memhog 2.5GB steps
+          commands:
+            - free -m
+            - go run ./cmd/memhog -mb 2500 -step 250 -hold 20s
+            - free -m
+
+  - name: Disk heavy
+    dependencies: ["Build"]
+    task:
+      jobs:
+        - name: disk write/read
+          commands:
+            - df -h /tmp
+            - ./scripts/disk.sh /tmp/diskjob
+
+  - name: Network heavy
+    dependencies: ["Build"]
+    task:
+      jobs:
+        - name: download go toolchains
+          parallelism: 3
+          commands:
+            - ./scripts/net.sh
+
+  - name: Log heavy
+    dependencies: ["Build"]
+    task:
+      jobs:
+        - name: logflood 40k
+          commands:
+            - go run ./cmd/logflood -lines 40000
+        - name: logflood 40k + go test -v
+          commands:
+            - go run ./cmd/logflood -lines 20000
+            - go test -v -count=3 ./internal/work/...
+
+  - name: Flaky step
+    dependencies: ["Build"]
+    task:
+      jobs:
+        - name: flaky with retry
+          commands:
+            - rm -f /tmp/flaky.count
+            - retry --times 4 --sleep 2 -- ./scripts/flaky.sh
+
 after_pipeline:
   task:
     jobs:
@@ -55,7 +200,7 @@ after_pipeline:
         commands:
           - test-results gen-pipeline-report
 promotions:
-  - name: Staging Deploy
+  - name: E2E
+    pipeline_file: e2e.yml
     auto_promote:
-      when: result = 'passed'
-    pipeline_file: staging.yml
+      when: "result = 'passed'"

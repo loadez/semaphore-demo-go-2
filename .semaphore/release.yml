@@ -1,0 +1,41 @@
+version: v1.0
+name: sxmoon complex release
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+global_job_config:
+  prologue:
+    commands:
+      - checkout
+blocks:
+  - name: Package
+    dependencies: []
+    task:
+      jobs:
+        - name: package linux
+          commands:
+            - artifact pull workflow bin-linux-amd64 --destination dist --force
+            - artifact pull workflow bin-linux-arm64 --destination dist --force
+            - tar czf release-$SEMAPHORE_GIT_SHA-linux.tgz dist
+            - sha256sum release-*.tgz | tee release-linux.sha256
+            - artifact push project release-$SEMAPHORE_GIT_SHA-linux.tgz --expire-in 1d
+        - name: package darwin
+          commands:
+            - artifact pull workflow bin-darwin-arm64 --destination dist --force
+            - tar czf release-$SEMAPHORE_GIT_SHA-darwin.tgz dist
+            - artifact push project release-$SEMAPHORE_GIT_SHA-darwin.tgz --expire-in 1d
+  - name: Deploy simulation
+    dependencies: ["Package"]
+    task:
+      jobs:
+        - name: verify and stage
+          commands:
+            - artifact pull project release-$SEMAPHORE_GIT_SHA-linux.tgz --force
+            - tar xzf release-$SEMAPHORE_GIT_SHA-linux.tgz
+            - file dist/*/main-* | head
+            - for s in 1 2 3 4 5; do echo "simulated rollout step $s/5 (no real deploy)"; sleep 3; done
+        - name: smoke simulation
+          commands:
+            - sleep 10
+            - echo "simulated smoke checks passed"

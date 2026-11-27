@@ -1,0 +1,44 @@
+version: v1.0
+name: sxmoon complex E2E
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+global_job_config:
+  env_vars:
+    - name: GO_VERSION
+      value: "1.22"
+  prologue:
+    commands:
+      - checkout
+      - sem-version go $GO_VERSION
+      - cache restore go-mod-$(checksum go.sum),go-mod-
+blocks:
+  - name: E2E
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - sem-service start postgres 14
+          - artifact pull workflow bin-linux-amd64 --destination bin --force
+          - ls -l bin
+      jobs:
+        - name: e2e shard
+          parallelism: 6
+          commands:
+            - ./scripts/e2e.sh
+      epilogue:
+        always:
+          commands:
+            - artifact push job server-$SEMAPHORE_JOB_INDEX.log || true
+after_pipeline:
+  task:
+    jobs:
+      - name: E2E report
+        commands:
+          - test-results gen-pipeline-report || true
+promotions:
+  - name: Release
+    pipeline_file: release.yml
+    auto_promote:
+      when: "result = 'passed'"
