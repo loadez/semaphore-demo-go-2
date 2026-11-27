@@ -62,7 +62,8 @@ func TestHashChain(t *testing.T) {
 	if HashChain("a", 1) == HashChain("b", 1) {
 		t.Fatal("different seeds collide")
 	}
-	if HashChain("a", 1000) != HashChain("a", 1000) {
+	first, second := HashChain("a", 1000), HashChain("a", 1000)
+	if first != second {
 		t.Fatal("not deterministic")
 	}
 	if HashChain("a", 1) == HashChain("a", 2) {

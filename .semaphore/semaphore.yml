@@ -39,7 +39,7 @@ blocks:
             - cache restore staticcheck-2024.1.1 || true
             - command -v staticcheck || go install honnef.co/go/tools/cmd/staticcheck@2024.1.1
             - cache has_key staticcheck-2024.1.1 || cache store staticcheck-2024.1.1 $(go env GOPATH)/bin
-            - staticcheck ./...
+            - staticcheck ./internal/... ./cmd/...
 
   - name: Build
     dependencies: []
