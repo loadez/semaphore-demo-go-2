@@ -7,7 +7,7 @@ agent:
 global_job_config:
   env_vars:
     - name: GO_VERSION
-      value: "1.22"
+      value: "1.23"
   prologue:
     commands:
       - checkout

@@ -12,7 +12,7 @@ global_job_config:
     - name: GOFLAGS
       value: "-mod=mod"
     - name: GO_VERSION
-      value: "1.22"
+      value: "1.23"
   prologue:
     commands:
       - checkout
