@@ -1,22 +1,22 @@
 version: v1.0
-name: sxmoon15 multi-region
+name: sxmoon-long spot reclaim watch
 agent:
   machine:
     type: f1-standard-2
     os_image: ubuntu2204
+execution_time_limit:
+  hours: 5
 blocks:
-  - name: Build and test
+  - name: Long run
+    execution_time_limit:
+      hours: 4
     task:
       jobs:
-        - name: go build test
-          parallelism: 15
+        - name: long spot watch
           commands:
-            - 'T=$(curl -s -m 2 -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60")'
-            - 'md() { curl -s -m 2 -H "X-aws-ec2-metadata-token: $T" http://169.254.169.254/latest/meta-data/$1; }'
-            - 'echo "S15 idx=$SEMAPHORE_JOB_INDEX region=$(md placement/region) az=$(md placement/availability-zone) azid=$(md placement/availability-zone-id) iid=$(md instance-id) itype=$(md instance-type) life=$(md instance-life-cycle)"'
-            - checkout
-            - sem-version go 1.21
-            - go build -o ./bin/main
-            - go vet ./...
-            - go test -count=1 -run '^$' ./...
-            - sleep 45
+            - 'T=$(curl -s -m 2 -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")'
+            - 'md() { T=$(curl -s -m 2 -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"); curl -s -m 3 -o - -w " [http %{http_code}]" -H "X-aws-ec2-metadata-token: $T" http://169.254.169.254/latest/meta-data/$1; }'
+            - 'echo "SLONG region=$(md placement/region) az=$(md placement/availability-zone) azid=$(md placement/availability-zone-id) iid=$(md instance-id) itype=$(md instance-type) life=$(md instance-life-cycle)"'
+            - 'END=$(( $(date +%s) + 13800 ))'
+            - 'while [ $(date +%s) -lt $END ]; do echo "SLONG $(date -u +%FT%TZ) up=$(cut -d" " -f1 /proc/uptime) load=$(cut -d" " -f1-3 /proc/loadavg) | instance-action:$(md spot/instance-action) | rebalance:$(md events/recommendations/rebalance) | events-reco:$(md events/recommendations/)"; sleep 60; done'
+            - 'echo "SLONG done $(date -u +%FT%TZ)"'
